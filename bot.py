@@ -397,6 +397,33 @@ async def printers_cmd(interaction: discord.Interaction, printer: str):
     await interaction.followup.send(embeds=embeds, files=files if files else discord.utils.MISSING)
 
 
+@bot.tree.command(name="update", description="Pull latest code from GitHub and restart the bot")
+async def update_cmd(interaction: discord.Interaction):
+    if interaction.user.id != (await bot.application_info()).owner.id:
+        await interaction.response.send_message("Only the bot owner can do this.", ephemeral=True)
+        return
+
+    await interaction.response.defer(thinking=True)
+
+    # Git pull
+    try:
+        result = subprocess.run(
+            ["git", "pull"],
+            capture_output=True, text=True, timeout=30,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        output = result.stdout.strip() or result.stderr.strip() or "No output"
+    except Exception as e:
+        await interaction.followup.send(f"Git pull failed: {e}")
+        return
+
+    await interaction.followup.send(f"**Git pull:**\n```\n{output}\n```\nRestarting bot...")
+
+    # Restart via systemd (this kills the current process, systemd brings it back)
+    await asyncio.sleep(1)
+    os.system("sudo systemctl restart bambu-discord")
+
+
 @printers_cmd.error
 async def printers_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CommandOnCooldown):

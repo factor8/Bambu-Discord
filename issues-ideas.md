@@ -13,7 +13,6 @@
     },
 ```
 
-
 Limit how many requests per minute?
 
 Sandbox channel for testing:
