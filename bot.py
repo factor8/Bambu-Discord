@@ -353,9 +353,9 @@ async def on_ready():
 
 @bot.tree.command(name="printers", description="Get detailed status for a specific printer")
 # @app_commands.checks.cooldown(1, 60, key=lambda i: (i.guild_id, (i.namespace.printer or "").lower()))
-@app_commands.describe(printer="Printer name or number (e.g. 1, 2)")
-async def printers_cmd(interaction: discord.Interaction, printer: str):
-    await interaction.response.defer(thinking=True, ephemeral=True)
+@app_commands.describe(printer="Printer name or number (e.g. 1, 2)", public="Show the response to everyone")
+async def printers_cmd(interaction: discord.Interaction, printer: str, public: bool = False):
+    await interaction.response.defer(thinking=True, ephemeral=not public)
 
     key = printer.strip().lower()
 
