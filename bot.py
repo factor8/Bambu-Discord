@@ -355,7 +355,7 @@ async def on_ready():
 # @app_commands.checks.cooldown(1, 60, key=lambda i: (i.guild_id, (i.namespace.printer or "").lower()))
 @app_commands.describe(printer="Printer name or number (e.g. 1, 2)")
 async def printers_cmd(interaction: discord.Interaction, printer: str):
-    await interaction.response.defer(thinking=True)
+    await interaction.response.defer(thinking=True, ephemeral=True)
 
     key = printer.strip().lower()
 
@@ -403,7 +403,7 @@ async def update_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("Only the bot owner can do this.", ephemeral=True)
         return
 
-    await interaction.response.defer(thinking=True)
+    await interaction.response.defer(thinking=True, ephemeral=True)
 
     # Git pull
     try:
