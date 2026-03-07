@@ -1,0 +1,17 @@
+[Unit]
+Description=Bambu X1C Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/bambu-discord-bot
+ExecStart=/home/pi/bambu-discord-bot/venv/bin/python bot.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip --version)",
+      "Bash(pip3 --version)",
+      "Bash(python -c \"import discord; print\\(''discord.py'', discord.__version__\\)\")",
+      "Bash(python -c \"import paho.mqtt; print\\(''paho-mqtt OK''\\)\")",
+      "Bash(python -c \"import requests; print\\(''requests'', requests.__version__\\)\")",
+      "Bash(where python)",
+      "Bash(where pip)",
+      "Bash(C:/Python314/python.exe --version)"
+    ]
+  }
+}
