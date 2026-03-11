@@ -16,6 +16,35 @@ import paho.mqtt.client as mqtt
 
 from config import load_config
 
+# ─── Error Code Lookup ────────────────────────────────────────────────────────
+
+_error_codes = {}
+
+def _load_error_codes():
+    global _error_codes
+    codes_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "error_codes.json")
+    try:
+        with open(codes_path, "r") as f:
+            _error_codes = json.load(f)
+        print(f"Loaded {len(_error_codes)} error codes")
+    except Exception as e:
+        print(f"Warning: Could not load error_codes.json: {e}")
+
+# Cancel error codes (decimal values) — these should not trigger alerts
+CANCEL_ERROR_CODES = {
+    0x0300400C,  # MC: Printing was cancelled
+    0x0500400E,  # System: Printing was cancelled
+}
+
+def resolve_error(error_code: int) -> str:
+    """Convert a numeric error code to a human-readable description."""
+    error_hex = f"{error_code:08X}"
+    error_key = f"{error_hex[:4]}_{error_hex[4:]}"
+    description = _error_codes.get(error_key)
+    if description:
+        return f"{description} (`{error_key}`)"
+    return f"Unknown error `{error_key}`"
+
 # ─── Printer State Store ──────────────────────────────────────────────────────
 
 class PrinterState:
@@ -181,21 +210,29 @@ class PrinterMQTT:
 
             # Error detection
             error_code = p.get("print_error", 0)
-            if error_code and error_code != 0:
-                s.error_message = f"Error code: {hex(error_code)}"
+            is_cancel = error_code in CANCEL_ERROR_CODES
+            if error_code and error_code != 0 and not is_cancel:
+                s.error_message = resolve_error(error_code)
+            elif is_cancel:
+                s.error_message = None
             elif s.print_status not in ("failed",):
                 s.error_message = None
 
-        # Fire alerts
+        # Fire alerts (skip cancelled prints)
         if s.print_status != prev_status:
             s._alert_sent = False
 
         if s.print_status in ("failed", "paused") and not s._alert_sent:
-            s._alert_sent = True
-            asyncio.run_coroutine_threadsafe(
-                self.alert_callback(s),
-                bot_loop
-            )
+            # Don't alert for cancelled prints
+            error_code = payload.get("print", {}).get("print_error", 0)
+            if error_code in CANCEL_ERROR_CODES:
+                s._alert_sent = True  # suppress alert
+            else:
+                s._alert_sent = True
+                asyncio.run_coroutine_threadsafe(
+                    self.alert_callback(s),
+                    bot_loop
+                )
 
 
 # ─── Camera Snapshot ──────────────────────────────────────────────────────────
@@ -440,6 +477,7 @@ async def printers_error(interaction: discord.Interaction, error):
 def main():
     global alert_channel_id
 
+    _load_error_codes()
     cfg = load_config()
     alert_channel_id = cfg.get("alert_channel_id")
 
