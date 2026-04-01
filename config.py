@@ -6,7 +6,6 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 
 EXAMPLE_CONFIG = {
     "discord_token": "YOUR_DISCORD_BOT_TOKEN_HERE",
-    "alert_channel_id": 1234567890123456789,
     "printers": [
         {
             "name": "Printer 1",

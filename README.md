@@ -6,9 +6,17 @@ Discord bot that lets you query live status + camera snapshots from your Bambu X
 
 | Command | Description |
 |---|---|
-| `/status` | Shows all printers with live data + snapshot |
-| `/status printer-1` | Shows a specific printer |
-| `/printers` | Lists all printers and connection state |
+| `/printers list` | One-line summary of all printers and connection state |
+| `/printers all` | Full status cards with snapshots for every printer |
+| `/printers <name or number>` | Full status card with snapshot for a specific printer (e.g. `/printers 1` or `/printers Printer 1`) |
+| `/sub3d subscribe` | Subscribe to DM notifications for all printers |
+| `/sub3d subscribe printer:<name>` | Subscribe to DM notifications for a specific printer |
+| `/sub3d unsubscribe` | Unsubscribe from all printer notifications |
+| `/sub3d unsubscribe printer:<name>` | Unsubscribe from a specific printer |
+| `/sub3d status` | Show your current subscriptions |
+| `/update` | (Owner only) Git pull and restart the bot |
+
+All commands are **ephemeral** (only visible to you) by default. Use the `public` option on `/printers` to show the response to everyone.
 
 ## Setup
 
@@ -29,11 +37,7 @@ On the printer touchscreen:
 - **Serial Number**: Settings → Device → Serial Number  
 - **Access Code**: Settings → Network → Access Code (8-character code)
 
-### 3. Get Your Alert Channel ID
-
-In Discord: Enable Developer Mode (Settings → Advanced), right-click your target channel → **Copy ID**
-
-### 4. Install on Raspberry Pi
+### 3. Install on Raspberry Pi
 
 ```bash
 # Clone / copy files to your Pi
@@ -50,12 +54,11 @@ pip install -r requirements.txt
 python bot.py
 ```
 
-### 5. Fill In config.json
+### 4. Fill In config.json
 
 ```json
 {
   "discord_token": "your-bot-token",
-  "alert_channel_id": 1234567890123456789,
   "printers": [
     {
       "name": "Printer 1",
@@ -67,14 +70,14 @@ python bot.py
 }
 ```
 
-### 6. Run It
+### 5. Run It
 
 ```bash
 source venv/bin/activate
 python bot.py
 ```
 
-### 7. Install as a Service (auto-start on boot)
+### 6. Install as a Service (auto-start on boot)
 
 ```bash
 sudo cp bambu-bot.service /etc/systemd/system/
@@ -89,8 +92,8 @@ sudo journalctl -u bambu-bot -f
 ## Notes
 
 - The bot connects to each printer's **local MQTT broker** (port 8883) — no cloud required
-- Camera snapshots use the printer's local HTTP endpoint
-- Alerts fire automatically for **pause** and **error/failed** states
+- Camera snapshots use the printer's local RTSP stream via ffmpeg
+- Alerts are sent as DMs to subscribed users (use `/sub3d`) for **pause** and **error/failed** states
 - The Pi must be on the same local network as the printers
 
 ## Troubleshooting

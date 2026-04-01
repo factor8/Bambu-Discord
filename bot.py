@@ -16,6 +16,29 @@ import paho.mqtt.client as mqtt
 
 from config import load_config
 
+# ─── Subscriber Storage ──────────────────────────────────────────────────────
+
+SUBS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "subscribers.json")
+
+def _load_subs() -> dict[str, list[int]]:
+    """Load subscribers. Keys are printer names or "all" for global."""
+    try:
+        with open(SUBS_PATH, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def _save_subs(subs: dict[str, list[int]]):
+    with open(SUBS_PATH, "w") as f:
+        json.dump(subs, f, indent=2)
+
+def _get_subscribers_for(printer_name: str) -> set[int]:
+    """Get all user IDs that should be notified for a given printer."""
+    subs = _load_subs()
+    user_ids = set(subs.get("all", []))
+    user_ids.update(subs.get(printer_name, []))
+    return user_ids
+
 # ─── Error Code Lookup ────────────────────────────────────────────────────────
 
 _error_codes = {}
@@ -299,22 +322,21 @@ def get_snapshot(printer_cfg: dict) -> Optional[bytes]:
 # ─── Bot Setup ────────────────────────────────────────────────────────────────
 
 intents = discord.Intents.default()
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 bot_loop = None
 
 printer_states: dict[str, PrinterState] = {}
 printer_cfgs: dict[str, dict] = {}
-alert_channel_id: int = None
 
 
 async def send_alert(state: PrinterState):
-    """Auto-post alert to configured channel."""
-    if not alert_channel_id:
-        return
-    channel = bot.get_channel(alert_channel_id)
-    if not channel:
+    """DM all subscribed users when a printer fails or pauses."""
+    subscriber_ids = _get_subscribers_for(state.name)
+    if not subscriber_ids:
         return
 
+    cfg = printer_cfgs.get(state.name)
     emoji = "🟡" if state.print_status == "paused" else "🔴"
     label = "Paused" if state.print_status == "paused" else "Failed / Error"
 
@@ -329,20 +351,27 @@ async def send_alert(state: PrinterState):
     if state.error_message:
         embed.add_field(name="Error", value=state.error_message, inline=False)
 
-    # Attach snapshot if available
-    cfg = printer_cfgs.get(state.name)
-    file_obj = None
+    # Grab snapshot once for all DMs
+    img = None
     if cfg:
         img = await asyncio.get_event_loop().run_in_executor(None, get_snapshot, cfg)
-        if img:
-            file_obj = discord.File(io.BytesIO(img), filename="snapshot.jpg")
-            embed.set_image(url="attachment://snapshot.jpg")
 
-    await channel.send(
-        content=f"@here **{state.name}** needs attention!",
-        embed=embed,
-        file=file_obj
-    )
+    for uid in subscriber_ids:
+        try:
+            user = bot.get_user(uid) or await bot.fetch_user(uid)
+            if not user:
+                continue
+            file_obj = None
+            if img:
+                file_obj = discord.File(io.BytesIO(img), filename="snapshot.jpg")
+                embed.set_image(url="attachment://snapshot.jpg")
+            await user.send(
+                content=f"**{state.name}** needs attention!",
+                embed=embed,
+                file=file_obj
+            )
+        except Exception as e:
+            print(f"[{state.name}] Failed to DM user {uid}: {e}")
 
 
 def build_status_embed(name: str, state: PrinterState, include_image: bool) -> tuple[discord.Embed, Optional[bytes]]:
@@ -434,6 +463,115 @@ async def printers_cmd(interaction: discord.Interaction, printer: str, public: b
     await interaction.followup.send(embeds=embeds, files=files if files else discord.utils.MISSING)
 
 
+@bot.tree.command(name="sub3d", description="Subscribe or unsubscribe from printer error notifications (DM)")
+@app_commands.describe(
+    action="Subscribe or unsubscribe",
+    printer="Printer name or number (leave blank for all printers)"
+)
+@app_commands.choices(action=[
+    app_commands.Choice(name="subscribe", value="sub"),
+    app_commands.Choice(name="unsubscribe", value="unsub"),
+    app_commands.Choice(name="status", value="status"),
+])
+async def sub3d_cmd(interaction: discord.Interaction, action: app_commands.Choice[str], printer: str = None):
+    await interaction.response.defer(thinking=True, ephemeral=True)
+    uid = interaction.user.id
+    subs = _load_subs()
+
+    if action.value == "status":
+        my_subs = []
+        for key, ids in subs.items():
+            if uid in ids:
+                my_subs.append("**All printers**" if key == "all" else f"**{key}**")
+        if my_subs:
+            await interaction.followup.send(f"You're subscribed to: {', '.join(my_subs)}")
+        else:
+            await interaction.followup.send("You're not subscribed to any printer notifications.")
+        return
+
+    # Determine subscription key
+    if printer:
+        key = printer.strip()
+        # Match by name or number
+        match = next((k for k in printer_states if k.lower() == key.lower()), None)
+        if not match:
+            match = next((k for k in printer_states if k.lower().endswith(f" {key.lower()}") or k.lower().startswith(f"{key.lower()} ")), None)
+        if not match:
+            await interaction.followup.send(
+                f"Unknown printer `{printer}`. Available: {', '.join(f'`{k}`' for k in printer_states)}"
+            )
+            return
+        key = match
+    else:
+        key = "all"
+
+    if key not in subs:
+        subs[key] = []
+
+    if action.value == "sub":
+        if uid in subs[key]:
+            label = "all printers" if key == "all" else key
+            await interaction.followup.send(f"You're already subscribed to **{label}**.")
+            return
+        subs[key].append(uid)
+        _save_subs(subs)
+        label = "all printers" if key == "all" else key
+        await interaction.followup.send(f"Subscribed to **{label}** notifications. You'll receive DMs when issues occur.")
+    else:  # unsub
+        if uid not in subs[key]:
+            label = "all printers" if key == "all" else key
+            await interaction.followup.send(f"You're not subscribed to **{label}**.")
+            return
+        subs[key].remove(uid)
+        if not subs[key]:
+            del subs[key]
+        _save_subs(subs)
+        label = "all printers" if key == "all" else key
+        await interaction.followup.send(f"Unsubscribed from **{label}** notifications.")
+
+
+@bot.tree.command(name="team", description="Assign the Team Member role to a user")
+@app_commands.describe(member="The user to add to the team")
+@app_commands.checks.has_permissions(administrator=True)
+async def team_cmd(interaction: discord.Interaction, member: discord.Member):
+    role = discord.utils.get(interaction.guild.roles, name="Team Member")
+    if not role:
+        await interaction.response.send_message(
+            "❌ No **Team Member** role found in this server. Please create it first.",
+            ephemeral=True
+        )
+        return
+
+    if role in member.roles:
+        await interaction.response.send_message(
+            f"{member.mention} already has the **Team Member** role.",
+            ephemeral=True
+        )
+        return
+
+    try:
+        await member.add_roles(role, reason=f"Added by {interaction.user}")
+        await interaction.response.send_message(
+            f"✅ {member.mention} has been given the **Team Member** role."
+        )
+    except discord.Forbidden:
+        await interaction.response.send_message(
+            "❌ I don't have permission to manage roles. Make sure my role is above **Team Member** in the role hierarchy.",
+            ephemeral=True
+        )
+
+
+@team_cmd.error
+async def team_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "❌ You need **Administrator** permission to use this command.",
+            ephemeral=True
+        )
+    else:
+        raise error
+
+
 @bot.tree.command(name="update", description="Pull latest code from GitHub and restart the bot")
 async def update_cmd(interaction: discord.Interaction):
     if interaction.user.id != (await bot.application_info()).owner.id:
@@ -475,11 +613,8 @@ async def printers_error(interaction: discord.Interaction, error):
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 
 def main():
-    global alert_channel_id
-
     _load_error_codes()
     cfg = load_config()
-    alert_channel_id = cfg.get("alert_channel_id")
 
     for p in cfg["printers"]:
         name = p["name"]
