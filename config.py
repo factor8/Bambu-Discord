@@ -18,6 +18,12 @@ EXAMPLE_CONFIG = {
             "ip": "192.168.1.101",
             "serial": "YOUR_PRINTER_SERIAL_2",
             "access_code": "YOUR_ACCESS_CODE_2"
+        },
+        {
+            "name": "Printer 3",
+            "ip": "192.168.1.102",
+            "serial": "YOUR_PRINTER_SERIAL_3",
+            "access_code": "YOUR_ACCESS_CODE_3"
         }
     ]
 }

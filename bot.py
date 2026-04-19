@@ -147,7 +147,8 @@ class PrinterMQTT:
         password = self.cfg["access_code"]
         host = self.cfg["ip"]
 
-        client = mqtt.Client(client_id=f"bambu_discord_{serial}", protocol=mqtt.MQTTv311)
+        client = mqtt.Client(client_id=f"bambu_discord_{serial}", protocol=mqtt.MQTTv311,
+                             callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
         client.username_pw_set(username, password)
 
         tls_ctx = ssl.create_default_context()
@@ -401,7 +402,7 @@ def build_status_embed(name: str, state: PrinterState, include_image: bool) -> t
                 fname = f"snapshot_{name.replace(' ', '_')}.jpg"
                 embed.set_image(url=f"attachment://{fname}")
 
-    embed.set_footer(text="Bambu X1C Monitor")
+    embed.set_footer(text="Bambu Monitor")
     return embed, img_data
 
 
