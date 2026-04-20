@@ -574,6 +574,7 @@ async def team_error(interaction: discord.Interaction, error):
 
 
 @bot.tree.command(name="update", description="Pull latest code from GitHub and restart the bot")
+@app_commands.default_member_permissions(administrator=True)
 async def update_cmd(interaction: discord.Interaction):
     if interaction.user.id != (await bot.application_info()).owner.id:
         await interaction.response.send_message("Only the bot owner can do this.", ephemeral=True)
