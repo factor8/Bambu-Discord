@@ -80,14 +80,28 @@ python bot.py
 ### 6. Install as a Service (auto-start on boot)
 
 ```bash
-sudo cp bambu-bot.service /etc/systemd/system/
+sudo cp bambu-discord.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable bambu-bot
 sudo systemctl start bambu-bot
-
-# Check logs
-sudo journalctl -u bambu-bot -f
 ```
+
+### 7. Managing the Bot (status.sh)
+
+Copy `status.sh` to the Pi, make it executable, and use it to manage the service without memorizing journalctl flags:
+
+```bash
+chmod +x status.sh
+```
+
+| Command | Description |
+|---|---|
+| `./status.sh` | Show service status |
+| `./status.sh logs` | Last 50 log lines |
+| `./status.sh logs 100` | Last N log lines |
+| `./status.sh follow` | Live tail (Ctrl+C to stop) |
+| `./status.sh restart` | Restart the bot |
+| `./status.sh stop` / `start` | Stop or start the bot |
 
 ## Notes
 
